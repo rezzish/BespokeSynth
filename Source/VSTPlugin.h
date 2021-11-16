@@ -40,6 +40,8 @@
 #include "VSTPlayhead.h"
 #include "VSTWindow.h"
 
+#include <atomic>
+
 #include "juce_audio_processors/juce_audio_processors.h"
 
 class ofxJSONElement;
@@ -117,6 +119,8 @@ private:
    ClickButton* mSavePresetFileButton;
    std::vector<std::string> mPresetFilePaths;
    ClickButton* mOpenEditorButton;
+   ClickButton* mPanicButton;
+   std::atomic<bool> mWantsPanic{false};
    int mOverlayWidth;
    int mOverlayHeight;
    
@@ -176,6 +180,8 @@ private:
     * Midi and MultiOut support
     */
    AdditionalNoteCable *mMidiOutCable{nullptr};
+
+   bool mWantOpenVstWindow{ false };
 };
 
 #endif /* defined(__Bespoke__VSTPlugin__) */

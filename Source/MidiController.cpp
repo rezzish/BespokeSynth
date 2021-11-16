@@ -41,6 +41,11 @@
 
 using namespace juce;
 
+//static
+double MidiController::sLastConnectedActivityTime = -9999;
+IUIControl* MidiController::sLastActivityUIControl = nullptr;
+double MidiController::sLastBoundControlTime = -9999;
+IUIControl* MidiController::sLastBoundUIControl = nullptr;
 bool UIControlConnection::sDrawCables = true;
 
 namespace
@@ -62,10 +67,6 @@ MidiController::MidiController()
 , mResendFeedbackOnRelease(false)
 , mControllerIndex(-1)
 , mLastActivityTime(-9999)
-, mLastConnectedActivityTime(-9999)
-, mLastActivityUIControl(nullptr)
-, mLastBoundControlTime(-9999)
-, mLastBoundUIControl(nullptr)
 , mBlink(false)
 , mControllerPage(0)
 , mPageSelector(nullptr)
@@ -360,10 +361,20 @@ void MidiController::OnTransportAdvanced(float amount)
    }
    mQueuedNotes.clear();
    
-   for (auto note = mQueuedControls.begin(); note != mQueuedControls.end(); ++note)
+   for (auto ctrl = mQueuedControls.begin(); ctrl != mQueuedControls.end(); ++ctrl)
    {
+      if (mSendCCOutput)
+      {
+         int voiceIdx = -1;
+
+         if (mUseChannelAsVoice)
+            voiceIdx = ctrl->mChannel - 1;
+
+         SendCCOutput(ctrl->mControl, ctrl->mValue, voiceIdx);
+      }
+
       for (auto i = mListeners[mControllerPage].begin(); i != mListeners[mControllerPage].end(); ++i)
-         (*i)->OnMidiControl(*note);
+         (*i)->OnMidiControl(*ctrl);
    }
    mQueuedControls.clear();
    
@@ -527,9 +538,9 @@ void MidiController::MidiReceived(MidiMessageType messageType, int control, floa
    if (mBindMode && gBindToUIControl)
    {
       AddControlConnection(messageType, control, channel, gBindToUIControl);
-      mLastBoundControlTime = gTime;
-      mLastBoundUIControl = gBindToUIControl;
-      mLastBoundUIControl->StartBeacon();
+      sLastBoundControlTime = gTime;
+      sLastBoundUIControl = gBindToUIControl;
+      sLastBoundUIControl->StartBeacon();
       gBindToUIControl = nullptr;
       return;
    }
@@ -537,9 +548,9 @@ void MidiController::MidiReceived(MidiMessageType messageType, int control, floa
    if (Push2Control::sBindToUIControl)
    {
       AddControlConnection(messageType, control, channel, Push2Control::sBindToUIControl);
-      mLastBoundControlTime = gTime;
-      mLastBoundUIControl = Push2Control::sBindToUIControl;
-      mLastBoundUIControl->StartBeacon();
+      sLastBoundControlTime = gTime;
+      sLastBoundUIControl = Push2Control::sBindToUIControl;
+      sLastBoundUIControl->StartBeacon();
       Push2Control::sBindToUIControl = nullptr;
       return;
    }
@@ -547,9 +558,9 @@ void MidiController::MidiReceived(MidiMessageType messageType, int control, floa
    if (mBindMode && gHoveredUIControl && (GetKeyModifiers() == kModifier_Shift))
    {
       AddControlConnection(messageType, control, channel, gHoveredUIControl);
-      mLastBoundControlTime = gTime;
-      mLastBoundUIControl = gHoveredUIControl;
-      mLastBoundUIControl->StartBeacon();
+      sLastBoundControlTime = gTime;
+      sLastBoundUIControl = gHoveredUIControl;
+      sLastBoundUIControl->StartBeacon();
       return;
    }
 
@@ -569,8 +580,8 @@ void MidiController::MidiReceived(MidiMessageType messageType, int control, floa
          if (uicontrol == nullptr)
             continue;
          
-         mLastActivityUIControl = uicontrol;
-         mLastConnectedActivityTime = gTime;
+         sLastActivityUIControl = uicontrol;
+         sLastConnectedActivityTime = gTime;
 
          if (connection->mType == kControlType_Slider)
          {
@@ -780,7 +791,7 @@ void MidiController::Poll()
          if (uicontrol == nullptr)
             continue;
 
-         if (JustBoundControl() && uicontrol == mLastBoundUIControl)
+         if (JustBoundControl() && uicontrol == sLastBoundUIControl)
             continue;
          
          if (!connection->mPageless && connection->mPage != mControllerPage)
@@ -1218,7 +1229,7 @@ void MidiController::DrawModule()
          ControlLayoutElement& control = GetLayoutControl(connection->mControl, connection->mMessageType);
          if (control.mControlCable)
          {
-            int x = 356;
+            int x = 370;
             int y = 59 + 20 * i;
 
             control.mControlCable->SetEnabled(UIControlConnection::sDrawCables);
@@ -1241,43 +1252,6 @@ namespace
 
 void MidiController::DrawModuleUnclipped()
 {
-   const float kDisplayMs = 500;
-   std::string displayString;
-   
-   IUIControl* drawControl = nullptr;
-   if (gTime < mLastBoundControlTime + kDisplayMs)
-   {
-      drawControl = mLastBoundUIControl;
-      if (drawControl != nullptr)
-         displayString = drawControl->Path() + " bound!";
-   }
-   else if (gTime < mLastConnectedActivityTime + kDisplayMs)
-   {
-      drawControl = mLastActivityUIControl;
-      if (drawControl != nullptr)
-         displayString = drawControl->Path() + ": " + drawControl->GetDisplayValue(drawControl->GetValue());
-   }
-
-   if (!displayString.empty() && drawControl != nullptr)
-   {
-      ofPushMatrix();
-      ofTranslate(-TheSynth->GetDrawOffset().x, -TheSynth->GetDrawOffset().y);
-      ofTranslate(-GetPosition().x, -GetPosition().y);
-      ofPushStyle();
-      ofFill();
-      ofVec2f pos(50, TheSynth->GetDrawRect().height - 100);
-      const float kWidth = 500;
-      const float kHeight = 70;
-      ofSetColor(80, 80, 80);
-      ofRect(pos.x, pos.y, kWidth, kHeight);
-      ofSetColor(120, 120, 120);
-      ofRect(pos.x, pos.y, kWidth * drawControl->GetMidiValue(), kHeight);
-      ofSetColor(255, 255, 255);
-      DrawTextBold(displayString, pos.x + 20, pos.y + 50, 40);
-      ofPopStyle();
-      ofPopMatrix();
-   }
-
    if (mHoveredLayoutElement != -1)
    {
       std::string tooltip;
@@ -1469,7 +1443,7 @@ void MidiController::GetModuleDimensions(float& width, float& height)
 {
    if (mMappingDisplayMode == kList)
    {
-      width = 880;
+      width = 900;
       height = 72 + 20 * GetNumConnectionsOnPage(mControllerPage);
    }
    else if (mMappingDisplayMode == kLayout)
@@ -2253,6 +2227,7 @@ void MidiController::LoadLayout(const ofxJSONElement& moduleInfo)
    
    mModuleSaveData.LoadInt("outchannel", moduleInfo, 1, 1, 16);
    
+   mModuleSaveData.LoadBool("send_cc_output", moduleInfo, false);
    mModuleSaveData.LoadBool("negativeedge",moduleInfo,false);
    mModuleSaveData.LoadBool("incrementalsliders", moduleInfo, false);
    mModuleSaveData.LoadBool("twoway_on_change", moduleInfo, true);
@@ -2283,6 +2258,7 @@ void MidiController::SetUpFromSaveData()
    mOutChannel = mModuleSaveData.GetInt("outchannel");
    assert(mOutChannel > 0 && mOutChannel <= 16);
    
+   mSendCCOutput = mModuleSaveData.GetBool("send_cc_output");
    UseNegativeEdge(mModuleSaveData.GetBool("negativeedge"));
    mSlidersDefaultToIncremental = mModuleSaveData.GetBool("incrementalsliders");
    mSendTwoWayOnChange = mModuleSaveData.GetBool("twoway_on_change");
@@ -2617,17 +2593,19 @@ void UIControlConnection::DrawList(int index)
    mIncrementalEntry->DrawLabel(false);
    mFeedbackDropdown->DrawLabel(false);
    
+   int x = 12;
    int y = 52 + 20 * index;
    
    IUIControl* lastControl = nullptr;
    for (auto iter = mEditorControls.begin(); iter != mEditorControls.end(); ++iter)
    {
-      if (lastControl)
-         (*iter)->PositionTo(lastControl, kAnchor_Right);
-      else
-         (*iter)->SetPosition(12,y);
+      (*iter)->SetPosition(x,y);
       (*iter)->Draw();
       lastControl = *iter;
+
+      x += (*iter)->GetRect().width + 3;
+      if (*iter == mUIControlPathEntry)
+         x += 13;
    }
    
    ofRectangle rect = mUIControlPathEntry->GetRect(true);

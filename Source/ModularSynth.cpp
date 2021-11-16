@@ -57,6 +57,7 @@ float ModularSynth::sBackgroundLissajousB = 0.418f;
 float ModularSynth::sBackgroundR = 0.09f;
 float ModularSynth::sBackgroundG = 0.09f;
 float ModularSynth::sBackgroundB = 0.09f;
+int ModularSynth::sLoadingFileSaveStateRev = ModularSynth::kSaveStateRev;
 
 #if BESPOKE_WINDOWS
 LONG WINAPI TopLevelExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo);
@@ -463,11 +464,13 @@ void ModularSynth::ZoomView(float zoomAmount, bool fromMouse)
       zoomCenter = ofVec2f(ofGetWidth() / gDrawScale * .5f, ofGetHeight() / gDrawScale * .5f);
    GetDrawOffset() -= zoomCenter * zoomAmount;
    mZoomer.CancelMovement();
+   mHideTooltipsUntilMouseMove = true;
 }
 
 void ModularSynth::PanView(float x, float y)
 {
    GetDrawOffset() += ofVec2f(x, y) / gDrawScale;
+   mHideTooltipsUntilMouseMove = true;
 }
 
 void ModularSynth::Draw(void* vg)
@@ -637,6 +640,7 @@ void ModularSynth::Draw(void* vg)
    std::string tooltip = "";
    ModuleContainer* tooltipContainer = nullptr;
    if (HelpDisplay::sShowTooltips && 
+       !mHideTooltipsUntilMouseMove &&
        !IUIControl::WasLastHoverSetViaTab() &&
        mGroupSelectContext == nullptr &&
        PatchCable::sActivePatchCable == nullptr &&
@@ -883,6 +887,9 @@ IDrawableModule* ModularSynth::GetLastClickedModule() const
 
 void ModularSynth::KeyPressed(int key, bool isRepeat)
 {
+   if (!isRepeat)
+      mHideTooltipsUntilMouseMove = true;
+
    if (gHoveredUIControl &&
        IKeyboardFocusListener::GetActiveKeyboardFocus() == nullptr &&
        !isRepeat)
@@ -1012,17 +1019,12 @@ void ModularSynth::KeyReleased(int key)
 
 float ModularSynth::GetMouseX(ModuleContainer* context, float rawX /*= FLT_MAX*/)
 {
-   return (rawX == FLT_MAX ? mMousePos.x : rawX) / context->GetDrawScale() - context->GetDrawOffset().x;
+   return ((rawX == FLT_MAX ? mMousePos.x : rawX) + UserPrefs.mouse_offset_x.Get()) / context->GetDrawScale() - context->GetDrawOffset().x;
 }
 
 float ModularSynth::GetMouseY(ModuleContainer* context, float rawY /*= FLT_MAX*/)
 {
-#if BESPOKE_MAC
-   const float kYOffset = -4;
-#else
-   const float kYOffset = 0;
-#endif
-   return ((rawY == FLT_MAX ? mMousePos.y : rawY) + kYOffset) / context->GetDrawScale() - context->GetDrawOffset().y;
+   return ((rawY == FLT_MAX ? mMousePos.y : rawY) + UserPrefs.mouse_offset_y.Get()) / context->GetDrawScale() - context->GetDrawOffset().y;
 }
 
 bool ModularSynth::IsMouseButtonHeld(int button)
@@ -1056,6 +1058,8 @@ void ModularSynth::MouseMoved(int intX, int intY)
          float y = GetMouseY(modal->GetOwningContainer());
          modal->NotifyMouseMoved(x, y);
       }
+
+      mHideTooltipsUntilMouseMove = false;
    }
 
    if (mMoveModule)
@@ -2026,9 +2030,9 @@ bool ModularSynth::LoadLayoutFromFile(std::string jsonFile, bool makeDefaultLayo
       IDrawableModule* splitter = FindModule("splitter");
       IDrawableModule* output1 = FindModule("output 1");
       IDrawableModule* output2 = FindModule("output 2");
-      if (output1 != nullptr && output1->GetPosition().y > ofGetHeight() - 40)
+      if (output1 != nullptr && output1->GetPosition().y > ofGetHeight() / gDrawScale - 40)
       {
-         float offset = ofGetHeight() - output1->GetPosition().y - 40;
+         float offset = ofGetHeight() / gDrawScale - output1->GetPosition().y - 40;
          if (gain != nullptr)
             gain->SetPosition(gain->GetPosition().x, gain->GetPosition().y + offset);
          if (splitter != nullptr)
@@ -2039,9 +2043,9 @@ bool ModularSynth::LoadLayoutFromFile(std::string jsonFile, bool makeDefaultLayo
             output2->SetPosition(output2->GetPosition().x, output2->GetPosition().y + offset);
       }
 
-      if (output2 != nullptr && output2->GetPosition().x > ofGetWidth() - 100)
+      if (output2 != nullptr && output2->GetPosition().x > ofGetWidth() / gDrawScale - 100)
       {
-         float offset = ofGetWidth() - output2->GetPosition().x - 100;
+         float offset = ofGetWidth() / gDrawScale - output2->GetPosition().x - 100;
          if (gain != nullptr)
             gain->SetPosition(gain->GetPosition().x + offset, gain->GetPosition().y);
          if (splitter != nullptr)
@@ -2363,7 +2367,7 @@ void ModularSynth::SaveLayout(std::string jsonFile, bool makeDefaultLayout /*= t
 
 void ModularSynth::SaveLayoutAsPopup()
 {
-   FileChooser chooser("Save current layout as...", File(ofToDataPath("layouts/newlayout.json")), "*.json", true, false, mMainComponent->getTopLevelComponent());
+   FileChooser chooser("Save current layout as...", File(ofToDataPath("layouts/newlayout.json")), "*.json", true, false, GetFileChooserParent());
    if (chooser.browseForFileToSave(true))
       SaveLayout(chooser.getResult().getRelativePathFrom(File(ofToDataPath(""))).toStdString());
 }
@@ -2379,9 +2383,18 @@ void ModularSynth::SaveCurrentState()
    SaveState(mCurrentSaveStatePath, false);
 }
 
+juce::Component* ModularSynth::GetFileChooserParent() const
+{
+#if BESPOKE_LINUX
+   return nullptr;
+#else
+   return mMainComponent->getTopLevelComponent();
+#endif
+}
+
 void ModularSynth::SaveStatePopup()
 {
-   FileChooser chooser("Save current state as...", File(ofToDataPath(ofGetTimestampString("savestate/%Y-%m-%d_%H-%M.bsk"))), "*.bsk", true, false, mMainComponent->getTopLevelComponent());
+   FileChooser chooser("Save current state as...", File(ofToDataPath(ofGetTimestampString("savestate/%Y-%m-%d_%H-%M.bsk"))), "*.bsk", true, false, GetFileChooserParent());
    if (chooser.browseForFileToSave(true))
       SaveState(chooser.getResult().getFullPathName().toStdString(), false);
 }
@@ -2393,7 +2406,7 @@ void ModularSynth::LoadStatePopup()
 
 void ModularSynth::LoadStatePopupImp()
 {
-   FileChooser chooser("Load state", File(ofToDataPath("savestate")), "*.bsk", true, false, mMainComponent->getTopLevelComponent());
+   FileChooser chooser("Load state", File(ofToDataPath("savestate")), "*.bsk", true, false, GetFileChooserParent());
    if (chooser.browseForFileToOpen())
       LoadState(chooser.getResult().getFullPathName().toStdString());
 }

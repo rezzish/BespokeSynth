@@ -855,7 +855,7 @@ void ScriptModule::ButtonClicked(ClickButton* button)
    
    if (button == mSaveScriptButton)
    {
-      FileChooser chooser("Save script as...", File(ofToDataPath("scripts/script.py")), "*.py", true, false, TheSynth->GetMainComponent()->getTopLevelComponent());
+      FileChooser chooser("Save script as...", File(ofToDataPath("scripts/script.py")), "*.py", true, false, TheSynth->GetFileChooserParent());
       if (chooser.browseForFileToSave(true))
       {
          std::string path = chooser.getResult().getFullPathName().toStdString();
@@ -951,10 +951,10 @@ void ScriptModule::DropdownUpdated(DropdownList *list, int oldValue)
 void ScriptModule::RefreshStyleFiles()
 {
     ofxJSONElement root;
-    if (File(ofToDataPath("script_styles.json")).existsAsFile())
-        root.open(ofToDataPath("script_styles.json"));
+    if (File(ofToDataPath("scriptstyles.json")).existsAsFile())
+        root.open(ofToDataPath("scriptstyles.json"));
     else
-        root.open(ofToResourcePath("userdata_original/script_styles.json"));
+        root.open(ofToResourcePath("userdata_original/scriptstyles.json"));
     sStyleJSON = root["styles"];
 }
 
@@ -1472,7 +1472,7 @@ void ScriptModule::LoadState(FileStreamIn& in)
 {
    int rev = -1;
 
-   if (ModuleContainer::sFileSaveStateRev >= 421)
+   if (ModularSynth::sLoadingFileSaveStateRev >= 421)
    {
       in >> rev;
       LoadStateValidate(rev <= kSaveStateRev);
@@ -1487,7 +1487,7 @@ void ScriptModule::LoadState(FileStreamIn& in)
 
    IDrawableModule::LoadState(in);
    
-   if (ModuleContainer::sFileSaveStateRev == 420)
+   if (ModularSynth::sLoadingFileSaveStateRev == 420)
    {
       in >> rev;
       LoadStateValidate(rev <= kSaveStateRev);

@@ -132,6 +132,7 @@ public:
    void LoadLayout(ofxJSONElement json);
    std::string GetLoadedLayout() const { return mLoadedLayoutPath; }
    void ReloadInitialLayout() { mWantReloadInitialLayout = true; }
+   bool HasFatalError() { return mFatalError != ""; }
    
    void AddLissajousDrawer(IDrawableModule* module) { mLissajousDrawers.push_back(module); }
    bool IsLissajousDrawer(IDrawableModule* module) { return VectorContains(module, mLissajousDrawers); }
@@ -220,6 +221,7 @@ public:
    std::string GetLastSavePath() { return mCurrentSaveStatePath; }
 
    UserPrefsEditor* GetUserPrefsEditor() { return mUserPrefsEditor; }
+   juce::Component* GetFileChooserParent() const;
 
    const juce::String& GetTextFromClipboard() const;
    void CopyTextToClipboard(const juce::String& text);
@@ -233,6 +235,9 @@ public:
    static float sBackgroundR;
    static float sBackgroundG;
    static float sBackgroundB;
+
+   static int sLoadingFileSaveStateRev;
+   static constexpr int kSaveStateRev = 422;
    
 private:
    void ResetLayout();
@@ -344,6 +349,7 @@ private:
    
    ofVec2f mMousePos;
    std::string mNextDrawTooltip;
+   bool mHideTooltipsUntilMouseMove{ false };
    
    juce::AudioDeviceManager* mGlobalAudioDeviceManager;
    juce::AudioFormatManager* mGlobalAudioFormatManager;

@@ -10,6 +10,7 @@ juce_add_gui_app(BespokeSynth
     FILE_SHARING_ENABLED          TRUE
     DOCUMENT_BROWSER_ENABLED      TRUE
     DOCUMENT_EXTENSIONS           .bsk
+    BUNDLE_ID                     com.ryanchallinor.bespokesynth
     )
 
 bespoke_buildtime_version_info(BespokeSynth)
@@ -379,14 +380,15 @@ target_compile_definitions(BespokeSynth PRIVATE
     JUCE_PLUGINHOST_VST=$<BOOL:${BESPOKE_VST2_SDK_LOCATION}>
 
     JUCE_CATCH_UNHANDLED_EXCEPTIONS=0
-
-    BESPOKE_LINUX_HIGH_FPS_WITH_THREAD_PROBLEMS=$<BOOL:${BESPOKE_LINUX_HIGH_FPS_WITH_THREAD_PROBLEMS}>
     )
 
 if (APPLE)
     target_compile_definitions(BespokeSynth PRIVATE
         BESPOKE_MAC=1
         JUCE_PLUGINHOST_AU=0 # this needs work but if you turn it to 1 with the link below it works
+        )
+    set_target_properties(BespokeSynth PROPERTIES
+        XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
         )
     target_sources(BespokeSynth PRIVATE
         CFMessaging/KontrolKommunicator.cpp
@@ -396,6 +398,23 @@ if (APPLE)
         KompleteKontrol.cpp
         )
     target_link_libraries(BespokeSynth PRIVATE "-framework CoreAudioKit")
+
+    if (BESPOKE_SIGN_AS)
+        message(STATUS "Creating target BespokeSynthSigned")
+        add_custom_target(BespokeSynthSigned)
+        add_dependencies(BespokeSynthSigned BespokeSynth)
+
+        get_target_property(SIGN_HERE BespokeSynth RUNTIME_OUTPUT_DIRECTORY)
+        add_custom_command(TARGET BespokeSynthSigned POST_BUILD VERBATIM
+                WORKING_DIRECTORY ${SIGN_HERE}
+                COMMAND codesign --force -s "${BESPOKE_SIGN_AS}" --deep BespokeSynth.app/Contents/Frameworks/Python.framework/
+                COMMAND find BespokeSynth.app/Contents/Frameworks/Python.framework/Versions/ -name *.so -exec codesign --force -s "${BESPOKE_SIGN_AS}" {} \;
+                COMMAND find BespokeSynth.app/Contents/Frameworks/Python.framework/Versions/ -name *.o -exec codesign --force -s "${BESPOKE_SIGN_AS}" {} \;
+                COMMAND find BespokeSynth.app/Contents/Frameworks/Python.framework/Versions/ -name python3* -perm +111 -exec codesign -o runtime --entitlements "${CMAKE_SOURCE_DIR}/scripts/installer_macOS/entitlements.plist" --force -s "${BESPOKE_SIGN_AS}"  {} \;
+                COMMAND find BespokeSynth.app/Contents/Frameworks/Python.framework/Versions/ -name Python -exec codesign -o runtime --entitlements "${CMAKE_SOURCE_DIR}/scripts/installer_macOS/entitlements.plist" --force -s "${BESPOKE_SIGN_AS}" {} \;
+                COMMAND codesign --force -s "${BESPOKE_SIGN_AS}" -o runtime --entitlements "${CMAKE_SOURCE_DIR}/scripts/installer_macOS/entitlements.plist" --deep BespokeSynth.app
+                )
+    endif()
 elseif (WIN32)
     target_compile_definitions(BespokeSynth PRIVATE BESPOKE_WINDOWS=1)
 

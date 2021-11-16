@@ -113,6 +113,8 @@ extern bool gShowDevModules;
 extern float gCornerRoundness;
 extern std::random_device gRandomDevice;
 extern std::mt19937 gRandom;
+extern std::uniform_real_distribution<float> gRandom01;
+extern std::uniform_real_distribution<float> gRandomBipolarDist;
 
 enum OscillatorType
 {
@@ -204,7 +206,7 @@ bool EvaluateExpression(std::string expression, float currentValue, float& outpu
 
 inline static float RandomSample()
 {
-   return (float(gRandom())/gRandom.max()) * 2.0f - 1.0f;
+   return gRandomBipolarDist(gRandom);
 }
 
 inline static std::string GetPathSeparator()

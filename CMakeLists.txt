@@ -8,7 +8,6 @@ set(BESPOKE_JUCE_LOCATION "${CMAKE_SOURCE_DIR}/libs/JUCE" CACHE STRING "Path to 
 set(BESPOKE_PYTHON_ROOT "" CACHE STRING "Python search path. Override as needed.")
 set(BESPOKE_VST2_SDK_LOCATION "" CACHE STRING "Steinberg VST2 SDK directory for non-FOSS builds")
 set(BESPOKE_ASIO_SDK_LOCATION "" CACHE STRING "Steinberg ASIO SDK directory for non-FOSS builds")
-set(BESPOKE_LINUX_HIGH_FPS_WITH_THREAD_PROBLEMS 0 CACHE BOOL "Enable if you want 60fps on Linux, but there's the possibility that you will get thread safety crashes. This is being investigated for a future release")
 
 # Global CMake options
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -21,7 +20,7 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
 endif ()
 
-project(BespokeSynth VERSION 1.0.1 LANGUAGES C CXX ASM)
+project(BespokeSynth VERSION 1.1.0 LANGUAGES C CXX ASM)
 
 message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
 math(EXPR BESPOKE_BITNESS "${CMAKE_SIZEOF_VOID_P} * 8" OUTPUT_FORMAT DECIMAL)
@@ -34,6 +33,8 @@ add_compile_options(
     # Set source and executable charsets to UTF-8. Required for building on CJK Windows.
     $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
     )
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 if(WIN32 AND ${BESPOKE_BITNESS} EQUAL 32)
     add_link_options(

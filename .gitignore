@@ -388,6 +388,10 @@ bespoke_windows_installer/HarvestedResourceDir.wixobj
 
 bespoke_windows_installer/HarvestedResourceDir.wxs
 
+bespoke_windows_installer/HarvestedPythonDir.wxs
+
+bespoke_windows_installer/HarvestedPythonDir.wixobj
+
 Builds/LinuxMakefile/Bespoke-Linux.zip
 
 bespoke_windows_installer/Bespoke-Windows.msi
@@ -400,3 +404,5 @@ instrumentscli0.trace/*
 
 run_cmake.bat
 run_cmake.sh
+
+scripts/installer_macOS/Bespoke-Mac.dmg
