@@ -1,5 +1,6 @@
 include(cmake/lib.cmake)
 include(cmake/versiontools.cmake)
+include(../libs/link/AbletonLinkConfig.cmake)
 
 juce_add_gui_app(BespokeSynth
     PRODUCT_NAME BespokeSynth
@@ -16,6 +17,7 @@ juce_add_gui_app(BespokeSynth
 bespoke_buildtime_version_info(BespokeSynth)
 
 target_sources(BespokeSynth PRIVATE
+    AbletonLink.cpp
     ADSR.cpp
     ADSRDisplay.cpp
     Amplifier.cpp
@@ -143,6 +145,8 @@ target_sources(BespokeSynth PRIVATE
     MathUtils.cpp
     Metronome.cpp
     MidiCapturer.cpp
+    MidiClockIn.cpp
+    MidiClockOut.cpp
     MidiControlChange.cpp
     MidiController.cpp
     MidiDevice.cpp
@@ -343,6 +347,12 @@ target_sources(BespokeSynth PRIVATE
     ofxJSONElement.cpp
     )
 
+if(BESPOKE_NIGHTLY)
+    target_compile_definitions(BespokeSynth PRIVATE
+        BESPOKE_NIGHTLY=1
+        )
+endif()
+
 if(BESPOKE_PORTABLE)
     set_source_files_properties(ScriptModule.cpp PROPERTIES
         COMPILE_DEFINITIONS BESPOKE_PORTABLE_PYTHON="$<IF:$<BOOL:${WIN32}>,python.exe,bin/python>"
@@ -387,9 +397,6 @@ if (APPLE)
         BESPOKE_MAC=1
         JUCE_PLUGINHOST_AU=0 # this needs work but if you turn it to 1 with the link below it works
         )
-    set_target_properties(BespokeSynth PROPERTIES
-        XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
-        )
     target_sources(BespokeSynth PRIVATE
         CFMessaging/KontrolKommunicator.cpp
         CFMessaging/ListenPort.cpp
@@ -400,6 +407,11 @@ if (APPLE)
     target_link_libraries(BespokeSynth PRIVATE "-framework CoreAudioKit")
 
     if (BESPOKE_SIGN_AS)
+        message(STATUS "Enabling hardened runtime for signed build")
+        set_target_properties(BespokeSynth PROPERTIES
+            XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES
+        )
+
         message(STATUS "Creating target BespokeSynthSigned")
         add_custom_target(BespokeSynthSigned)
         add_dependencies(BespokeSynthSigned BespokeSynth)
@@ -459,8 +471,9 @@ target_link_libraries(BespokeSynth PRIVATE
     bespoke::pybind11
     bespoke::xwax
 
-    tuning-library
+    $<$<STREQUAL:${BESPOKE_SYSTEM_TUNING_LIBRARY},OFF>:tuning-library>
     oddsound-mts
+    Ableton::Link
 
     juce::juce_audio_basics
     juce::juce_audio_devices
@@ -469,6 +482,12 @@ target_link_libraries(BespokeSynth PRIVATE
     juce::juce_gui_basics
     juce::juce_opengl
     juce::juce_osc
+    # if JUCE is devendored, these libraries need to be linked against
+    $<$<BOOL:${BESPOKE_DEVENDORED_SYSTEM_JUCE}>:FLAC>
+    $<$<BOOL:${BESPOKE_DEVENDORED_SYSTEM_JUCE}>:ogg>
+    $<$<BOOL:${BESPOKE_DEVENDORED_SYSTEM_JUCE}>:vorbis>
+    $<$<BOOL:${BESPOKE_DEVENDORED_SYSTEM_JUCE}>:vorbisenc>
+    $<$<BOOL:${BESPOKE_DEVENDORED_SYSTEM_JUCE}>:vorbisfile>
 
     ${Python_LIBRARIES}
     $<$<BOOL:${MINGW}>:dbghelp>
@@ -484,19 +503,13 @@ add_custom_target(nightly-package)
 add_dependencies(nightly-package BespokeSynth)
 
 if (APPLE)
+    if (BESPOKE_SIGN_AS)
+        # If we aren't signing there's no target
+        add_dependencies(nightly-package BespokeSynthSigned)
+    endif()
+    get_target_property(output_dir BespokeSynth RUNTIME_OUTPUT_DIRECTORY)
     add_custom_command(TARGET nightly-package
-            POST_BUILD
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${BESPOKE_NIGHTLY_DIR}
-            COMMAND hdiutil create /tmp/tmp.dmg -ov -volname "BespokeSynth" -fs HFS+ -srcfolder $<TARGET_BUNDLE_DIR:BespokeSynth>
-            COMMAND ${CMAKE_COMMAND} -E rm -f "${BESPOKE_NIGHTLY_DIR}/BespokeNightly.dmg"
-            COMMAND hdiutil convert /tmp/tmp.dmg -format UDZO -o "${BESPOKE_NIGHTLY_DIR}/BespokeNightly.dmg"
-            )
-else()
-    add_custom_command(TARGET nightly-package
-            POST_BUILD
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${BESPOKE_NIGHTLY_DIR}
-            COMMAND ${CMAKE_COMMAND} -E echo "coming soon}" > ${BESPOKE_NIGHTLY_DIR}/installer.txt
-            )
+             POST_BUILD
+             COMMAND ${CMAKE_SOURCE_DIR}/scripts/installer_macOS/make_installer.sh "${output_dir}" "${CMAKE_SOURCE_DIR}/scripts/installer_macOS" "${BESPOKE_NIGHTLY_DIR}" "${CMAKE_PROJECT_VERSION}"
+             )
 endif()

@@ -230,6 +230,10 @@ void VSTPlugin::Exit()
    {
       mWindow.reset();
    }
+   if (mPlugin)
+   {
+      mPlugin.reset();
+   }
 }
 
 std::string VSTPlugin::GetTitleLabel() const
@@ -693,6 +697,16 @@ void VSTPlugin::SendCC(int control, int value, int voiceIdx /*=-1*/)
    const juce::ScopedLock lock(mMidiInputLock);
    
    mMidiBuffer.addEvent(juce::MidiMessage::controllerEvent((mUseVoiceAsChannel ? channel : mChannel), control, (uint8)value), 0);
+}
+
+void VSTPlugin::SendMidi(const juce::MidiMessage& message)
+{
+   if (!mPluginReady || mPlugin == nullptr)
+      return;
+
+   const juce::ScopedLock lock(mMidiInputLock);
+
+   mMidiBuffer.addEvent(message, 0);
 }
 
 void VSTPlugin::SetEnabled(bool enabled)

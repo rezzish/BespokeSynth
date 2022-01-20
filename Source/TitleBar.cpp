@@ -248,10 +248,7 @@ void SpawnListManager::SetModuleFactory(ModuleFactory* factory)
    mOtherModules.SetList(factory->GetSpawnableModules(kModuleType_Other), "");
    
    SetUpVstDropdown();
-   
-   std::vector<std::string> prefabs;
-   ModuleFactory::GetPrefabs(prefabs);
-   mPrefabs.SetList(prefabs, "prefab");
+   SetUpPrefabsDropdown();
    
    mDropdowns.push_back(&mInstrumentModules);
    mDropdowns.push_back(&mNoteModules);
@@ -262,6 +259,13 @@ void SpawnListManager::SetModuleFactory(ModuleFactory* factory)
    mDropdowns.push_back(&mVstPlugins);
    mDropdowns.push_back(&mOtherModules);
    mDropdowns.push_back(&mPrefabs);
+}
+
+void SpawnListManager::SetUpPrefabsDropdown()
+{
+    std::vector<std::string> prefabs;
+    ModuleFactory::GetPrefabs(prefabs);
+    mPrefabs.SetList(prefabs, "prefab");
 }
 
 void SpawnListManager::SetUpVstDropdown()
@@ -332,6 +336,9 @@ void TitleBar::DrawModule()
    if (gHoveredModule == this && mLeftCornerHovered)
       ofSetColor(ofColor::lerp(ofColor::black, ofColor::white, ofMap(sin(gTime / 1000 * PI * 2),-1,1,.7f,.9f)));
    DrawTextBold("bespoke", 2, 28, 36);
+#if BESPOKE_NIGHTLY
+   DrawTextNormal("nightly", 90, 35, 10);
+#endif
 #if DEBUG
    ofFill();
    ofSetColor(0, 0, 0, 180);
@@ -557,6 +564,9 @@ void TitleBar::DropdownClicked(DropdownList* list)
 {
    if (list == mSpawnLists.mVstPlugins.GetList())
       mSpawnLists.SetUpVstDropdown();
+
+   if (list == mSpawnLists.mPrefabs.GetList())
+       mSpawnLists.SetUpPrefabsDropdown();
 }
 
 void TitleBar::DropdownUpdated(DropdownList* list, int oldVal)
