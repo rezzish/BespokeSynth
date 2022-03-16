@@ -103,8 +103,8 @@ class Transport : public IDrawableModule, public IButtonListener, public IFloatS
 public:
    Transport();
    
-   
    void CreateUIControls() override;
+   void Poll() override;
 
    float GetTempo() { return mTempo; }
    void SetTempo(float tempo) { mTempo = tempo; }
@@ -165,6 +165,7 @@ private:
    double SwingBeat(double pos);
    void Nudge(double amount);
    void AdjustTempo(double amount);
+   void SetRandomTempo();
 
    //IDrawableModule
    void DrawModule() override;
@@ -193,6 +194,7 @@ private:
    FloatSlider* mTempoSlider;
    int mLoopStartMeasure;
    int mLoopEndMeasure;
+   bool mWantSetRandomTempo{false};
 
    std::list<TransportListenerInfo> mListeners;
    std::list<IAudioPoller*> mAudioPollers;
